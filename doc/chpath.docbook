@@ -1,0 +1,88 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!-- This document was created with Syntext Serna Free. --><!DOCTYPE refentry PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd" []>
+<refentry id="chpath">
+  <refmeta>
+    <refentrytitle>chpath</refentrytitle>
+    <manvolnum>1</manvolnum>
+  </refmeta>
+  <refnamediv>
+    <refname>chpath</refname>
+    <refpurpose>Manipulate a file search path</refpurpose>
+  </refnamediv>
+  <refsynopsisdiv>
+    <cmdsynopsis>
+      <command>chpath</command>
+      <arg>
+        <option>-arz</option>
+      </arg>
+      <arg choice="req">path modification</arg>
+    </cmdsynopsis>
+    <cmdsynopsis>
+      <command>chpath -d</command>
+      <arg choice="opt">
+        <option>-arz</option>
+      </arg>
+      <arg choice="req" rep="norepeat">directory</arg>
+      <arg rep="repeat">directory</arg>
+    </cmdsynopsis>
+  </refsynopsisdiv>
+  <refsect1>
+    <title>Description</title>
+    <para>The <command>chpath</command> command allows the modification of an arbitrary search path variable, such as <emphasis role="italic">PATH</emphasis>.</para>
+    <para>The command has two principle forms. The first allows ad-hoc search path manipulation based on command options and parameters, whilst the second modifies paths based on rules associated with a directory.</para>
+  </refsect1>
+  <refsect1>
+    <title>Path Modification</title>
+    <para>A <parameter>path modification </parameter>specification takes the form</para>
+    <para><code><varname>VAR</varname> = </code><parameter>path-expression</parameter>[<literal>:</literal><parameter>path-expression</parameter>...]</para>
+    <para><parameter>path-expression</parameter> = [<literal>{</literal><parameter>qualifier</parameter>[,...]<literal>}</literal>]<parameter>path</parameter></para>
+    <para>Where <varname>VAR</varname> is the name of an environment variable to modify, and <parameter>path-expression</parameter> defines an element to either insert into or remove from the variable&apos;s value, which is assumed to be a colon separated search path.</para>
+    <para>One or more qualifiers may be optionally included, described  below.</para>
+    <variablelist>
+      <varlistentry>
+        <term>
+          <emphasis role="bold">prepend</emphasis>
+        </term>
+        <listitem>
+          <para>Place the element at the start of the search list.</para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term>
+          <emphasis role="bold">append</emphasis>
+        </term>
+        <listitem>
+          <para>Place the element at the end of the search list.</para>
+        </listitem>
+      </varlistentry>
+    </variablelist>
+    <variablelist>
+      <varlistentry>
+        <term>
+          <emphasis role="bold">literal</emphasis>
+        </term>
+        <listitem>
+          <para>Treat the text that follows literally. Other wise strings not starting with a &quot;/&quot; are treated as relative paths.</para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term>
+          <emphasis role="bold">promote</emphasis>
+          <parameter>path-expr</parameter>
+        </term>
+        <listitem>
+          <para>Give any existing element matching <parameter>path-expr</parameter> priority over the element being inserted. For prepend operations this means inserting after any existing occurrence of <parameter>path-expr</parameter>, and for append operations inserting before any such occurrence. The <parameter>path-expr</parameter> parameter is itself a <parameter>path-expression</parameter>, so for examle, to prepend an element whilst giving priority to a &quot;.&quot; in the search path, you can use the qualifier <code>{prepend, promote </code>{literal}.}</para>
+        </listitem>
+      </varlistentry>
+    </variablelist>
+  </refsect1>
+  <refsect1>
+    <title>Directory Based Rules</title>
+    <para>Path rules can be associated with directory paths within a directory. This is done either by placing a <code>.chpath</code> file within the directory, or by defining rules against the directory in one of the chpath configuration files, see ....</para>
+    <refsect2>
+      <title>Rules Syntax</title>
+      <para>Directory rules consist of a list of rules statements.</para>
+      <para/>
+    </refsect2>
+  </refsect1>
+</refentry>
