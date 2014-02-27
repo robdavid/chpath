@@ -20,7 +20,7 @@ quickTest t = do
   case r of
     Success _ _ _ -> return ()
     GaveUp _ l _ -> assertFailure $ joinStr $ map fst l
-    Failure _ _ _ _ _ l _ -> assertFailure $ "Failed for:\n" ++ (joinStr $ map fst l)
+    Failure {labels=l}  -> assertFailure $ "Failed for:\n" ++ (joinStr $ map fst l)
     NoExpectedFailure _ l _ -> assertFailure $ "Failed for:\n" ++ (joinStr $ map fst l)
 
 joinStr :: [String] -> String
