@@ -9,9 +9,16 @@ import Control.Monad (ap, foldM)
 import Control.Applicative (Applicative(..), pure, (<*>), (<*), (*>), (<$>))
 import CHPath.AST
 
+{-
+PATH = $PATH:.
+PATH += .
+PATH =+ [.]
+PATH = [.]:$PATH:bin
+PATH = ([.]):$PATH-(a:b:c):bincd
+-}
 lang = emptyDef {
          P.commentLine = "#",
-         P.reservedNames = [ "promote", "append", "prepend", "replace", "literal", "directory", "include", "dirdef" ]
+         P.reservedNames = [ "dir", "directory", "include", "dirdef" ]
        }
 lexer = P.makeTokenParser lang
 
@@ -25,82 +32,79 @@ reserved = P.reserved lexer
 braces = P.braces lexer
 brackets = P.brackets lexer
 parens = P.parens lexer
-
---instance Applicative (GenParser s a) where
---    pure = return
---   (<*>) = ap
-
-qualifier :: Parser Qualifier
-qualifier = (reserved "append" *> return Append) <|>
-            (reserved "prepend" *> return Prepend) <|>
-            (reserved "literal" *> return Literal) <|>
-            (reserved "replace" *> return Replace) <|>
-            (reserved "promote" *> (Promote <$> (qualifyPath <$> qualified <*> path)))
-
-
-qualifiers :: Parser [Qualifier]
-qualifiers = braces (sepBy qualifier comma)
-
-qualified :: Parser [Qualifier]
-qualified = qualifiers  <|> return []
-
-assignment :: Parser Assignment
-assignment = return Assignment <*> try (whiteSpace *> identifier) <*> (symbol "=" *> pathList)
-
-pathList :: Parser PathList
-pathList = PathList <$> sepBy pathElement colon
-
-pathElement :: Parser PathElem
-pathElement = do 
-  whiteSpace 
-  q <- qualified 
-  (PathElemList q <$> (parens pathList)) <|> (PathElem q <$> path)
+lexeme = P.lexeme lexer
 
 anyTrue :: [a-> Bool] -> a -> Bool
 anyTrue l x = foldl (\b f -> b || f x) False l
 
 noneTrue l x = not (anyTrue l x)
 
-pathChar = satisfy (noneTrue [flip elem ":(){}", isSpace])
+pathChar = satisfy (noneTrue [flip elem ":(){}[]-\";,=+^", isSpace])
+envChar = satisfy $ \c -> isAlphaNum c || c == '_'
 
+lineWhiteSpace :: Parser String
+lineWhiteSpace = many (satisfy (\c -> isSpace c && c /= '\n'))
 
-path :: Parser Path
-path = Path <$> (stringLiteral <|> many pathChar)
+pathStr :: Parser String
+pathStr = stringLiteral <|> many1 pathChar
 
-directoryClause :: Parser Path
-directoryClause = Path <$> (try (whiteSpace *> (reserved "directory" <|> reserved "include")) 
-                                    *> whiteSpace *> (filePathOf <$> path))
+path :: Parser PathElement
+path = File <$> pathStr
 
-directoryDef :: Parser DirectoryDef
-directoryDef = DirectoryDef <$> ((try (whiteSpace *> reserved "dirdef")) *> whiteSpace *> path) <*>
-               (whiteSpace *> braces (statementList))
+literal :: Parser PathElement
+literal =Literal <$> brackets (stringLiteral <|> many pathChar)
+
+envvar :: Parser PathElement
+envvar = EnvVar <$> (symbol "@" *> many1 envChar)
+
+optionalElement :: Parser PathElement
+optionalElement = Optional <$> braces pathElement
+
+--pathTerm = try subtraction <|> pathElement
+pathTerm :: Parser PathElement
+pathTerm = pathElement `chainl1` (try (whiteSpace *> symbol "-") *> whiteSpace *>  return Subtract)
+
+pathElement = literal <|> envvar <|> optionalElement <|> parens pathList <|> path
+
+pathList :: Parser PathElement
+pathList = PathList <$> sepBy pathTerm (try (whiteSpace *> colon) <* whiteSpace)
+
+assignment :: Parser Statement
+assignment = do
+  var <- identifier
+  whiteSpace
+  (Assignment var <$> try (symbol "+=" *> reassign var (\e l -> PathList (e:l))) <*> return Nothing) <|>
+    (Assignment var <$> try (symbol "=+" *> reassign var (\e l -> PathList (l++[e]))) <*> return Nothing) <|>
+    (Assignment var <$> try (symbol "-=" *> reassign var (\e l -> Subtract e (PathList l)))<*> return Nothing) <|>
+    (Assignment var <$> (symbol "=" *> pathList) <*> optionMaybe (try (whiteSpace *> symbol "^") *> pathList))
+  where reassign :: String -> (PathElement -> [PathElement] -> PathElement)-> Parser PathElement
+        reassign var combinator = combinator (EnvVar var) . unwrapList <$> pathList
+
+directoryDef :: Parser Statement
+directoryDef = DirectoryDef <$> (reserved "dirdef" *> whiteSpace *> pathStr) <*>
+               (whiteSpace *> braces (whiteSpace *> statementList <* whiteSpace))
+
+directory :: Parser Statement
+directory = Directory <$> ((reserved "directory" <|> reserved "dir" <|> reserved "include") *> whiteSpace *> pathStr)
 
 statement :: Parser Statement
-statement = ((QualifierStatement <$> qualifiers) <|> 
-             (DirectoryStatement <$> directoryClause) <|> 
-             (DirectoryDefStatement <$> directoryDef) <|> 
-             (AssignmentStatement <$> assignment)) 
-             <* whiteSpace
+statement = directory <|>  directoryDef <|>  assignment
 
 rcStatement :: Parser Statement
-rcStatement = (DirectoryDefStatement <$> directoryDef)
-              <* whiteSpace
+rcStatement = directoryDef
 
-
-defaultedEnvStatement :: String -> Parser Statement
-defaultedEnvStatement s = ((AssignmentStatement <$> (try assignment)) <|> 
-                           (AssignmentStatement <$> (Assignment s <$> pathList) <* whiteSpace)) <* eof
+statementSep = lexeme $ optional (char ';') <* whiteSpace
+cliStatementSep = lexeme $ optional (char ',') <* whiteSpace
 
 statementList :: Parser [Statement]
-statementList = many statement <* whiteSpace
+statementList = many (try statement <* statementSep)
 
 rcStatementList :: Parser [Statement]
-rcStatementList = many rcStatement <* whiteSpace
+rcStatementList = many (try rcStatement <* statementSep)
 
-rcDefinitions = rcStatementList <* eof
-definitions =  statementList <* eof
+cliStatementList :: Parser [Statement]
+cliStatementList = statement `sepBy` cliStatementSep
 
--- Local Variables:
--- haskell-program-name: "ghci -package parsec-2.1.0.1"
--- End:
-
+cliDefinitions = whiteSpace *> cliStatementList <* whiteSpace <* eof
+rcDefinitions = whiteSpace *> rcStatementList <* eof
+definitions =  whiteSpace *> statementList <* eof
